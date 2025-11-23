@@ -4,6 +4,7 @@ install_packages.py
 downloads
 troubleshooting
 project_initializer.txt
+copy_wheels.py
 
 # Python
 __pycache__/
