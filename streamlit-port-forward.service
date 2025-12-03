@@ -1,0 +1,16 @@
+[Unit]
+Description=Kubectl Port Forward for Streamlit Service
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/bin/kubectl port-forward svc/streamlit-service 8501:80 --address 0.0.0.0
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
