@@ -24,6 +24,16 @@ echo "Setting up systemd user services for port-forwards..."
 echo "User: $USER"
 echo "Systemd user directory: $SYSTEMD_USER_DIR"
 
+# Find kubectl path
+KUBECTL_PATH=$(which kubectl)
+if [ -z "$KUBECTL_PATH" ]; then
+    echo "Error: kubectl not found in PATH"
+    echo "Please ensure kubectl is installed and in your PATH"
+    exit 1
+fi
+
+echo "Found kubectl at: $KUBECTL_PATH"
+
 # Create systemd user directory if it doesn't exist
 mkdir -p "$SYSTEMD_USER_DIR"
 
@@ -35,7 +45,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/kubectl port-forward svc/streamlit-service 8501:80 --address 0.0.0.0
+ExecStart=$KUBECTL_PATH port-forward svc/streamlit-service 8501:80 --address 0.0.0.0
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -53,7 +63,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/kubectl port-forward -n logging svc/kibana 5601:5601 --address 0.0.0.0
+ExecStart=$KUBECTL_PATH port-forward -n logging svc/kibana 5601:5601 --address 0.0.0.0
 Restart=always
 RestartSec=10
 StandardOutput=journal
