@@ -6,6 +6,17 @@
 set -e
 
 USER=$(whoami)
+
+# Check if running as root
+if [ "$USER" = "root" ]; then
+    echo "Error: This script should NOT be run as root or with sudo."
+    echo "Please run it as your regular user (blessedman776)."
+    echo ""
+    echo "If you need to enable lingering, run this command separately:"
+    echo "  sudo loginctl enable-linger blessedman776"
+    exit 1
+fi
+
 HOME_DIR=$(eval echo ~$USER)
 SYSTEMD_USER_DIR="$HOME_DIR/.config/systemd/user"
 
@@ -60,7 +71,13 @@ systemctl --user daemon-reload
 
 # Enable lingering (keeps services running after logout)
 echo "Enabling user lingering..."
-loginctl enable-linger "$USER"
+if sudo loginctl enable-linger "$USER" 2>/dev/null; then
+    echo "User lingering enabled successfully."
+else
+    echo "Warning: Could not enable lingering automatically."
+    echo "You may need to run manually: sudo loginctl enable-linger $USER"
+    echo "Continuing with setup anyway..."
+fi
 
 # Stop any existing port-forwards
 echo "Stopping any existing port-forwards..."
