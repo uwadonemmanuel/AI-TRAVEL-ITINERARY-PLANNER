@@ -44,9 +44,33 @@
 - **Install Docker**
 
   - Search: "Install Docker on Ubuntu"
-  - Open the first official Docker website (docs.docker.com)
+  - Open the first official Docker website (docs.docker.com) (e.g. https://docs.docker.com/engine/install/ubuntu/)
   - Scroll down and copy the **first big command block** and paste into your VM terminal
+
+    ```bash
+    # Add Docker's official GPG key:
+    sudo apt update
+    sudo apt install ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add the repository to Apt sources:
+    sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+
+    sudo apt update
+
+    ```
   - Then copy and paste the **second command block**
+    ```bash
+      sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    ```
   - Then run the **third command** to test Docker:
 
     ```bash
@@ -55,8 +79,16 @@
 
 - **Run Docker without sudo**
 
-  - On the same page, scroll to: **"Post-installation steps for Linux"**
+  - On the same page, scroll to: **"Post-installation steps for Linux"** (e.g. https://docs.docker.com/engine/install/linux-postinstall/)
   - Paste all 4 commands one by one to allow Docker without `sudo`
+
+     ```bash
+        sudo groupadd docker
+        sudo usermod -aG docker $USER
+        newgrp docker
+        docker run hello-world
+    ```
+
   - Last command is for testing
 
 - **Enable Docker to start on boot**
@@ -83,7 +115,7 @@
 - **Install Minikube**
 
   - Open browser and search: `Install Minikube`
-  - Open the first official site (minikube.sigs.k8s.io) with `minikube start` on it
+  - Open the first official site (minikube.sigs.k8s.io) with `minikube start` on it (e.g. https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download)
   - Choose:
     - **OS:** Linux
     - **Architecture:** *x86*
@@ -93,6 +125,10 @@
 - **Install Minikube Binary on VM**
 
   - Copy and paste the installation commands from the website into your VM terminal
+  ```bash
+  curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+  sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+  ```
 
 - **Start Minikube Cluster**
 
@@ -106,7 +142,17 @@
 
   - Search: `Install kubectl`
   - Run the first command with `curl` from the official Kubernetes docs
+   ```bash
+  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+  ```
   - Run the second command to validate the download
+  ```bash
+  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
+  ```
+  ```bash
+  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+  ```
+   
   - Instead of installing manually, go to the **Snap section** (below on the same page)
 
   ```bash
