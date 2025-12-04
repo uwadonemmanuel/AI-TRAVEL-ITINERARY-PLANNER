@@ -39,7 +39,7 @@ fi
 
 # Start nginx
 echo "Starting nginx..."
-sudo nginx -c "$NGINX_DIR/nginx.conf" -g "pid /tmp/nginx.pid;"
+sudo nginx -c "$NGINX_DIR/nginx.conf"
 
 if [ $? -eq 0 ]; then
     echo "✓ Nginx started successfully"
