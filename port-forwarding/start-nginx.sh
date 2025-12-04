@@ -3,13 +3,22 @@
 # Script to start nginx with the custom configuration
 # This needs to be run with sudo
 
-NGINX_DIR="$HOME/nginx-https-proxy"
+# Get the actual user's home directory (not root's when using sudo)
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(eval echo ~$SUDO_USER)
+else
+    USER_HOME="$HOME"
+fi
+
+NGINX_DIR="$USER_HOME/nginx-https-proxy"
 
 if [ ! -f "$NGINX_DIR/nginx.conf" ]; then
     echo "Error: nginx.conf not found at $NGINX_DIR/nginx.conf"
-    echo "Please run ./tmux-port-forward-setup.sh first"
+    echo "Please run ./tmux-port-forward-setup.sh first (as your regular user, not sudo)"
     exit 1
 fi
+
+echo "Using nginx config from: $NGINX_DIR/nginx.conf"
 
 # Check if nginx is already running
 if pgrep nginx > /dev/null; then
