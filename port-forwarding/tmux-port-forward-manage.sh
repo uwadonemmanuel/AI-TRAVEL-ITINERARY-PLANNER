@@ -31,14 +31,13 @@ case "$1" in
             echo "⚠ Kibana port-forward already running"
         fi
         
-        # Start nginx if config exists
-        if [ -f "$HOME/nginx-https-proxy/nginx.conf" ]; then
-            if ! tmux has-session -t nginx-proxy 2>/dev/null; then
-                tmux new-session -d -s nginx-proxy \
-                    "sudo nginx -c $HOME/nginx-https-proxy/nginx.conf -g 'pid /tmp/nginx.pid;' || echo 'Nginx requires sudo'"
-                echo "✓ Nginx proxy started (if sudo available)"
+        # Start Caddy if service exists
+        if systemctl list-unit-files | grep -q caddy-https-proxy.service; then
+            if ! sudo systemctl is-active caddy-https-proxy.service &>/dev/null; then
+                sudo systemctl start caddy-https-proxy.service
+                echo "✓ Caddy HTTPS proxy started"
             else
-                echo "⚠ Nginx proxy already running"
+                echo "⚠ Caddy HTTPS proxy already running"
             fi
         fi
         ;;
@@ -47,8 +46,7 @@ case "$1" in
         echo "Stopping port-forwards..."
         tmux kill-session -t streamlit-port-forward 2>/dev/null && echo "✓ Streamlit stopped" || echo "⚠ Streamlit not running"
         tmux kill-session -t kibana-port-forward 2>/dev/null && echo "✓ Kibana stopped" || echo "⚠ Kibana not running"
-        tmux kill-session -t nginx-proxy 2>/dev/null && echo "✓ Nginx stopped" || echo "⚠ Nginx not running"
-        sudo nginx -s quit 2>/dev/null || true
+        sudo systemctl stop caddy-https-proxy.service 2>/dev/null && echo "✓ Caddy stopped" || echo "⚠ Caddy not running"
         ;;
         
     restart)
@@ -76,12 +74,13 @@ case "$1" in
             echo "✗ Kibana port-forward: Not running"
         fi
         echo ""
-        if tmux has-session -t nginx-proxy 2>/dev/null; then
-            echo "✓ Nginx proxy: Running"
-            echo "  Session: nginx-proxy"
+        if sudo systemctl is-active caddy-https-proxy.service &>/dev/null; then
+            echo "✓ Caddy HTTPS proxy: Running"
+            echo "  Service: caddy-https-proxy.service"
             echo "  HTTPS Port: 443 (Streamlit), 8443 (Kibana)"
         else
-            echo "✗ Nginx proxy: Not running"
+            echo "✗ Caddy HTTPS proxy: Not running"
+            echo "  Start with: sudo systemctl start caddy-https-proxy.service"
         fi
         echo ""
         echo "All tmux sessions:"
@@ -90,13 +89,18 @@ case "$1" in
         
     logs)
         SESSION="${2:-streamlit-port-forward}"
-        if tmux has-session -t "$SESSION" 2>/dev/null; then
+        if [ "$SESSION" = "caddy" ]; then
+            echo "Viewing Caddy logs (Ctrl+C to exit)..."
+            sudo journalctl -u caddy-https-proxy.service -f
+        elif tmux has-session -t "$SESSION" 2>/dev/null; then
             echo "Attaching to $SESSION (Ctrl+B then D to detach)..."
             tmux attach -t "$SESSION"
         else
             echo "Session $SESSION not found"
             echo "Available sessions:"
             tmux ls 2>/dev/null || echo "No sessions"
+            echo ""
+            echo "To view Caddy logs: $0 logs caddy"
         fi
         ;;
         
@@ -132,18 +136,20 @@ case "$1" in
         echo "Usage: $0 {start|stop|restart|status|logs [session]|test}"
         echo ""
         echo "Commands:"
-        echo "  start   - Start all port-forwards and nginx"
-        echo "  stop    - Stop all port-forwards and nginx"
+        echo "  start   - Start all port-forwards and Caddy"
+        echo "  stop    - Stop all port-forwards and Caddy"
         echo "  restart - Restart all services"
         echo "  status  - Show status of all services"
-        echo "  logs    - Attach to a tmux session (default: streamlit-port-forward)"
+        echo "  logs    - Attach to a tmux session or view Caddy logs"
+        echo "           Examples: $0 logs streamlit-port-forward"
+        echo "                     $0 logs caddy"
         echo "  test    - Test HTTPS connectivity"
         echo ""
         echo "Examples:"
         echo "  $0 start"
         echo "  $0 status"
         echo "  $0 logs streamlit-port-forward"
-        echo "  $0 logs kibana-port-forward"
+        echo "  $0 logs caddy"
         exit 1
         ;;
 esac

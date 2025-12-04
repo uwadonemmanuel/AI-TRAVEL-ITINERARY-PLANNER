@@ -147,154 +147,107 @@ else
 fi
 
 echo ""
-echo "=== Setting up HTTPS Reverse Proxy ==="
+echo "=== Setting up HTTPS Reverse Proxy with Caddy ==="
 echo ""
 
-# Create nginx configuration directory
-NGINX_DIR="$HOME/nginx-https-proxy"
-mkdir -p "$NGINX_DIR/conf.d"
-mkdir -p "$NGINX_DIR/ssl"
-
-# Generate self-signed certificates (for testing)
-echo "Generating self-signed SSL certificates..."
-if [ ! -f "$NGINX_DIR/ssl/server.crt" ]; then
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$NGINX_DIR/ssl/server.key" \
-        -out "$NGINX_DIR/ssl/server.crt" \
-        -subj "/C=US/ST=State/L=City/O=Organization/CN=34.9.116.136" \
-        2>/dev/null || {
-        echo "Warning: OpenSSL not found. Installing..."
-        sudo apt-get update
-        sudo apt-get install -y openssl
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$NGINX_DIR/ssl/server.key" \
-            -out "$NGINX_DIR/ssl/server.crt" \
-            -subj "/C=US/ST=State/L=City/O=Organization/CN=34.9.116.136"
-    }
-    echo "✓ SSL certificates generated"
-else
-    echo "✓ SSL certificates already exist"
-fi
-
-# Create nginx configuration
-cat > "$NGINX_DIR/nginx.conf" <<'NGINX_EOF'
-user www-data;
-worker_processes auto;
-pid /run/nginx.pid;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    # Logging
-    access_log /var/log/nginx/access.log;
-    error_log /var/log/nginx/error.log;
-
-    # Gzip
-    gzip on;
-    gzip_vary on;
-    gzip_proxied any;
-    gzip_comp_level 6;
-    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss;
-
-    # Upstream servers
-    upstream streamlit {
-        server 127.0.0.1:8501;
-    }
-
-    upstream kibana {
-        server 127.0.0.1:5601;
-    }
-
-    # HTTP to HTTPS redirect
-    server {
-        listen 80;
-        server_name 34.9.116.136;
-        return 301 https://$server_name$request_uri;
-    }
-
-    # Streamlit HTTPS
-    server {
-        listen 443 ssl http2;
-        server_name 34.9.116.136;
-
-        ssl_certificate /home/blessedman776/nginx-https-proxy/ssl/server.crt;
-        ssl_certificate_key /home/blessedman776/nginx-https-proxy/ssl/server.key;
-        
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        ssl_prefer_server_ciphers on;
-
-        location / {
-            proxy_pass http://streamlit;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_read_timeout 86400;
-        }
-    }
-
-    # Kibana HTTPS (on different port)
-    server {
-        listen 8443 ssl http2;
-        server_name 34.9.116.136;
-
-        ssl_certificate /home/blessedman776/nginx-https-proxy/ssl/server.crt;
-        ssl_certificate_key /home/blessedman776/nginx-https-proxy/ssl/server.key;
-        
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        ssl_prefer_server_ciphers on;
-
-        location / {
-            proxy_pass http://kibana;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_read_timeout 86400;
-        }
-    }
-}
-NGINX_EOF
-
-# Replace username in nginx config
-sed -i "s|/home/blessedman776|$HOME|g" "$NGINX_DIR/nginx.conf"
-
-# Check if nginx is installed
-if ! command -v nginx &> /dev/null; then
-    echo "Installing nginx..."
+# Check if Caddy is installed
+if ! command -v caddy &> /dev/null; then
+    echo "Installing Caddy..."
     sudo apt-get update
-    sudo apt-get install -y nginx
+    sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+    
+    # Add Caddy repository
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null || {
+        echo "Installing GPG key..."
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo tee /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    }
+    
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+    sudo apt-get update
+    sudo apt-get install -y caddy
+    
+    echo "✓ Caddy installed"
+else
+    echo "✓ Caddy is already installed"
 fi
 
-# Create nginx log directory
-sudo mkdir -p /var/log/nginx
-sudo chown www-data:www-data /var/log/nginx
+# Stop any existing Caddy
+sudo systemctl stop caddy 2>/dev/null || true
+sudo systemctl stop caddy-https-proxy 2>/dev/null || true
+pkill caddy 2>/dev/null || true
+sleep 2
 
-# Test nginx configuration
-echo "Testing nginx configuration..."
-sudo nginx -t -c "$NGINX_DIR/nginx.conf" 2>/dev/null || {
-    echo "Creating nginx test configuration..."
-    # Use a simpler approach - run nginx in a container or as user
-    echo "Note: Running nginx as user (requires nginx to support this)"
+# Create Caddy configuration directory
+CADDY_DIR="$HOME/caddy-https-proxy"
+mkdir -p "$CADDY_DIR"
+
+# Create Caddyfile
+cat > "$CADDY_DIR/Caddyfile" <<'CADDY_EOF'
+# Streamlit HTTPS
+:443 {
+    reverse_proxy localhost:8501 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # Use self-signed certificate for testing
+    tls self_signed
 }
 
-# Create tmux session for nginx
-echo "Setting up nginx reverse proxy in tmux..."
-tmux new-session -d -s nginx-proxy \
-    "sudo nginx -c $NGINX_DIR/nginx.conf -g 'pid /tmp/nginx.pid;' || echo 'Nginx failed to start. You may need to run: sudo nginx -c $NGINX_DIR/nginx.conf'"
+# Kibana HTTPS
+:8443 {
+    reverse_proxy localhost:5601 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # Use self-signed certificate for testing
+    tls self_signed
+}
+
+# HTTP to HTTPS redirect
+:80 {
+    redir https://{host}{uri} permanent
+}
+CADDY_EOF
+
+echo "✓ Caddyfile created at $CADDY_DIR/Caddyfile"
+
+# Create systemd service for Caddy
+sudo tee /etc/systemd/system/caddy-https-proxy.service > /dev/null <<SERVICE_EOF
+[Unit]
+Description=Caddy HTTPS Reverse Proxy for Port-Forwards
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/caddy run --config $CADDY_DIR/Caddyfile
+ExecReload=/usr/bin/caddy reload --config $CADDY_DIR/Caddyfile --force
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Replace home directory in service file
+sudo sed -i "s|\$CADDY_DIR|$CADDY_DIR|g" /etc/systemd/system/caddy-https-proxy.service
+sudo sed -i "s|$HOME|$HOME|g" /etc/systemd/system/caddy-https-proxy.service
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Start Caddy
+echo "Starting Caddy..."
+sudo systemctl start caddy-https-proxy.service
+sudo systemctl enable caddy-https-proxy.service
+
+sleep 3
 
 sleep 2
 
@@ -315,10 +268,12 @@ else
     echo "✗ Kibana port-forward: Not running"
 fi
 
-if tmux has-session -t nginx-proxy 2>/dev/null; then
-    echo "✓ Nginx proxy: Running"
+if sudo systemctl is-active caddy-https-proxy.service &>/dev/null; then
+    echo "✓ Caddy HTTPS proxy: Running"
 else
-    echo "✗ Nginx proxy: Not running (may need sudo)"
+    echo "✗ Caddy HTTPS proxy: Not running"
+    echo "  Check status: sudo systemctl status caddy-https-proxy.service"
+    echo "  Check logs: sudo journalctl -u caddy-https-proxy.service -n 20"
 fi
 
 echo ""
@@ -336,5 +291,11 @@ echo "  List sessions:    tmux ls"
 echo "  Attach to session: tmux attach -t streamlit-port-forward"
 echo "  Detach:           Press Ctrl+B then D"
 echo "  Kill session:     tmux kill-session -t streamlit-port-forward"
+echo ""
+echo "Caddy management:"
+echo "  Status:  sudo systemctl status caddy-https-proxy.service"
+echo "  Restart: sudo systemctl restart caddy-https-proxy.service"
+echo "  Stop:    sudo systemctl stop caddy-https-proxy.service"
+echo "  Logs:    sudo journalctl -u caddy-https-proxy.service -f"
 echo ""
 
