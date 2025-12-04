@@ -20,9 +20,15 @@ fi
 
 echo "Using nginx config from: $NGINX_DIR/nginx.conf"
 
-# Check if nginx is already running
+# Check if nginx is already running (check both systemd service and direct process)
+if systemctl is-active nginx &>/dev/null; then
+    echo "Stopping systemd nginx service..."
+    sudo systemctl stop nginx
+    sleep 2
+fi
+
 if pgrep nginx > /dev/null; then
-    echo "Nginx is already running. Stopping it first..."
+    echo "Stopping existing nginx processes..."
     sudo nginx -s quit 2>/dev/null || sudo pkill nginx
     sleep 2
 fi
@@ -37,18 +43,25 @@ else
     exit 1
 fi
 
-# Start nginx
-echo "Starting nginx..."
+# Start nginx with custom config
+echo "Starting nginx with custom configuration..."
 sudo nginx -c "$NGINX_DIR/nginx.conf"
 
-if [ $? -eq 0 ]; then
+sleep 2
+
+# Verify nginx is running
+if pgrep nginx > /dev/null; then
     echo "✓ Nginx started successfully"
     echo ""
     echo "HTTPS services should now be accessible:"
     echo "  Streamlit: https://34.9.116.136/"
     echo "  Kibana:    https://34.9.116.136:8443/"
+    echo ""
+    echo "Note: Nginx is running with custom config, not as systemd service."
+    echo "To stop it, use: sudo nginx -s quit"
 else
     echo "✗ Failed to start nginx"
+    echo "Check error logs: sudo tail -f /var/log/nginx/error.log"
     exit 1
 fi
 
