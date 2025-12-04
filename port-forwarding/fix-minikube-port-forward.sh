@@ -138,3 +138,4 @@ echo "If Minikube stops, the services will fail until Minikube is restarted."
 echo ""
 echo "To ensure Minikube starts on boot, you may want to set up a Minikube service as well."
 
+

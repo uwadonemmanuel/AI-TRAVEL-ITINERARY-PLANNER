@@ -45,3 +45,4 @@ echo ""
 kubectl get pods -n logging 2>&1 | head -5
 echo ""
 
+

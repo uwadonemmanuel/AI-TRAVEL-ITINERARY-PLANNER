@@ -113,3 +113,4 @@ echo "If ports are only listening on 127.0.0.1, the --address 0.0.0.0 flag may n
 echo "If ports are not listening at all, check service logs for errors."
 echo "If localhost works but external IP doesn't, check firewall rules."
 
+
