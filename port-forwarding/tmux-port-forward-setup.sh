@@ -15,11 +15,46 @@ if ! command -v tmux &> /dev/null; then
     sudo apt-get install -y tmux
 fi
 
-# Check if kubectl is accessible
+# Check if kubectl is accessible, wait for Minikube if needed
+echo "Checking Kubernetes cluster connectivity..."
 if ! kubectl cluster-info &>/dev/null; then
-    echo "Error: Cannot connect to Kubernetes cluster"
-    echo "Please ensure Minikube is running: minikube start"
-    exit 1
+    echo "Kubernetes cluster not accessible. Checking Minikube status..."
+    
+    if ! command -v minikube &> /dev/null; then
+        echo "Error: minikube not found. Please install Minikube first."
+        exit 1
+    fi
+    
+    MINIKUBE_STATUS=$(minikube status 2>/dev/null | head -1)
+    if echo "$MINIKUBE_STATUS" | grep -q "Stopped\|not found"; then
+        echo "Minikube is not running. Starting Minikube..."
+        minikube start
+        if [ $? -ne 0 ]; then
+            echo "Warning: Minikube start had some issues, but continuing..."
+        fi
+    else
+        echo "Minikube appears to be starting. Waiting for it to be ready..."
+    fi
+    
+    # Wait for cluster to be ready (max 2 minutes)
+    echo "Waiting for Kubernetes cluster to be ready..."
+    for i in {1..120}; do
+        if kubectl cluster-info &>/dev/null 2>&1; then
+            echo "✓ Kubernetes cluster is ready"
+            break
+        fi
+        if [ $i -eq 120 ]; then
+            echo "Error: Kubernetes cluster not ready after 2 minutes"
+            echo "Please check Minikube status: minikube status"
+            exit 1
+        fi
+        sleep 1
+        if [ $((i % 10)) -eq 0 ]; then
+            echo "  Still waiting... ($i/120 seconds)"
+        fi
+    done
+else
+    echo "✓ Kubernetes cluster is accessible"
 fi
 
 # Check for existing services and warn
@@ -83,8 +118,20 @@ echo "Setting up Kibana port-forward (HTTP on 5601)..."
 tmux new-session -d -s kibana-port-forward \
     "kubectl port-forward -n logging svc/kibana 5601:5601 --address 0.0.0.0"
 
-# Wait for port-forwards to establish
-sleep 3
+# Wait for port-forwards to establish and verify
+echo "Waiting for port-forwards to establish..."
+sleep 5
+
+# Verify port-forwards are working
+for i in {1..30}; do
+    if ss -tlnp 2>/dev/null | grep -q ":8501 " || netstat -tlnp 2>/dev/null | grep -q ":8501 "; then
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "Warning: Port 8501 not listening after 30 seconds"
+    fi
+    sleep 1
+done
 
 # Check if port-forwards are running
 if tmux has-session -t streamlit-port-forward 2>/dev/null; then
